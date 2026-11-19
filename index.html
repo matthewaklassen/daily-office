@@ -147,6 +147,7 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
     <li>Nothing in the offices is newly composed. Text in red italic is the prayer book's own rubric; notes marked ¶ are this edition's directions only.</li>
     <li>The Absolution is appointed for a minister. In its place this office reads the Comfortable Words of Scripture, from the Communion, and prays the 1662 Collect for pardon and peace (the Twenty-first Sunday after Trinity).</li>
     <li>The 1662 table of lessons includes readings from the Apocrypha. M'Cheyne's calendar, made for Scottish Presbyterian households, is used instead.</li>
+    <li>The Shorter Catechism is taken one question a day, the same in every form, beginning with Question 1 on Advent Sunday and starting again each Advent.</li>
     <li>The collect of the day follows the 1662 Sundays and the chief feasts of Christ (Christmas, the Circumcision, the Epiphany, Ash Wednesday, Good Friday, Easter Even, Ascension Day). Saints' days are not observed.</li>
     <li>The family and personal forms are shortened from the full office: the same texts, fewer of them, in the same order of call, confession, assurance, Word, prayer and blessing. They take the first psalm appointed for the day and one of the Comfortable Words in turn.</li>
     <li>The psalms follow the 1662 order of thirty days, with the 1662 Proper Psalms on Christmas Day, Ash Wednesday, Good Friday, Easter Day, Ascension Day and Whitsunday. On the thirty-first the psalms of the thirtieth are read.</li>
@@ -302,7 +303,9 @@ function collectsBlock(d, peace, third){
   return h+src('Book of Common Prayer, 1662: Collects; Morning and Evening Prayer');
 }
 function catechism(d){
-  const i=((diff(d,new Date(2026,0,1))%107)+107)%107, q=T.wsc[i];
+  // the cycle begins at Question 1 on Advent Sunday, the first day of the church year, and runs through the year
+  let A=advent(d.getFullYear()); if (d<A) A=advent(d.getFullYear()-1);
+  const i=diff(d,A)%107, q=T.wsc[i];
   return `<div class="qa"><b>Q.</b><span class="q">${q[0]}. ${esc(q[1])}</span><b>A.</b><span>${esc(q[2])}</span></div>`+src(`Westminster Shorter Catechism, question ${q[0]}`);
 }
 function reading(ref){
@@ -342,10 +345,8 @@ function shortOffice(d, dom, m, mc, s, family){
   h+=part(family?'The Psalm':'The Psalm',
     note(family?'Sing the opening stanzas of the first psalm appointed for today.':'Read the first psalm appointed for today.')+
     firstPsalm(d, office, family?3:2));
-  if (family){
-    h+=part('The Reading', reading(mc[m?0:1])+src("M'Cheyne Calendar: for the household"));
-    h+=part('The Catechism', catechism(d));
-  }
+  if (family) h+=part('The Reading', reading(mc[m?0:1])+src("M'Cheyne Calendar: for the household"));
+  h+=part('The Catechism', catechism(d));
   if (!family) h+=part("The Lord’s Prayer", lines(T.lordsprayer.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
   let col='';
   { const ck=collectKey(d).key, c=T.collects[ck]; col+=`<p class="rub">The Collect of the day: ${esc(c.title)}.</p>`+lines(c.collect.map(t=>['text',t]));
