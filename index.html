@@ -47,6 +47,9 @@ h3 .num{color:var(--rubric);font-weight:500;min-width:2.2em}
 .note{color:var(--umber);font-size:16px;line-height:24px;margin:var(--s1) 0}
 .note::before{content:"¶ ";color:var(--rubric)}
 p{margin:0 0 var(--s1)}
+.gl{font-family:var(--serif);font-size:15px;line-height:1;width:24px;height:24px;border-radius:50%;border:1px solid var(--rubric);color:var(--rubric);background:transparent;cursor:pointer;padding:0;flex:none;align-self:center}
+.gl[aria-expanded="true"]{background:var(--rubric);color:var(--page)}
+.gloss{color:var(--umber);font-size:16px;line-height:24px;border-left:2px solid var(--faded);padding:4px 0 4px 12px;margin:0 0 var(--s2)}
 .src{font-variant-caps:small-caps;font-variant-numeric:oldstyle-nums;letter-spacing:.07em;color:var(--umber);font-size:16px;line-height:22px;margin:var(--s1) 0 0}
 .ref{font-style:italic;color:var(--umber)}
 .amen{font-style:italic}
@@ -133,7 +136,8 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
   <select id="season" aria-label="Go to a season"><option value="">Go to a season…</option></select>
   <button id="bNext" aria-label="Next day">Day after ›</button>
 </div>
-<p class="dateline"><span class="d" id="dDate"></span><span class="w" id="dWeek"></span><button class="today" id="bToday" hidden>Return to today</button></p>
+<p class="dateline"><span class="d" id="dDate"></span><span class="w" id="dWeek"></span><button class="today" id="bToday" hidden>Return to today</button> <button class="gl" aria-expanded="false" aria-controls="gYear" aria-label="What is this?">?</button></p>
+<p class="gloss" id="gYear" hidden>The church year runs from Advent, four Sundays before Christmas, through Christmas, Epiphany, Lent, Easter and Whitsunday, then counts the Sundays after Trinity until Advent comes again. Each week takes its collect from its Sunday.</p>
 
 <main id="office"></main>
 
@@ -246,7 +250,45 @@ function lines(arr, opts={}){
 const src = s => `<p class="src">${s}</p>`;
 const note = s => `<p class="note">${s}</p>`;
 let n=0; const ROM=['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','XIII','XIV','XV','XVI','XVII','XVIII','XIX','XX'];
-const part = (title, inner) => `<section class="part"><h3><span class="num">${ROM[n++]}.</span><span>${title}</span></h3>${inner}</section>`;
+const GLOSS = [
+ ['The Sentence','A verse of Scripture that opens the service and calls you to worship. The 1662 book gives eleven; the page uses one each day in turn.'],
+ ['The Call','A verse of Scripture to begin, then the first lines of the prayer book’s opening: “O Lord, open thou our lips.”'],
+ ['The Confession','A confession of sin said together, written for the 1552 prayer book. It names sins of omission and commission and asks for mercy through Christ.'],
+ ['The Absolution','A declaration of God’s forgiveness to all who truly repent and believe the Gospel. The 1662 book gives it to a minister to pronounce.'],
+ ['For Pardon','Without a minister to declare forgiveness, this short prayer asks God for pardon and peace.'],
+ ['The Comfortable Words','Four short promises of forgiveness from the New Testament. “Comfortable” is used in its old sense: strengthening.'],
+ ['The Assurance','One of the four “Comfortable Words”: a promise of forgiveness from the New Testament, read after confessing. “Comfortable” is used in its old sense: strengthening.'],
+ ['The Lord’s Prayer','The prayer Jesus taught his disciples (Matthew 6:9-13). The prayer book uses it more than once in each service.'],
+ ['The Versicles','Short lines said back and forth between the leader and everyone else, mostly taken from the Psalms. “Versicle” means a little verse.'],
+ ['Venite','Psalm 95, the psalm of invitation that opens the psalms in the morning. Its first word in Latin, venite, means “O come.”'],
+ ['The Psalms appointed','The prayer book reads all 150 psalms every month, a set portion each morning and evening. The prose is Miles Coverdale’s translation from the Great Bible of 1539; the metrical psalter is the Scottish Psalter of 1650, for singing.'],
+ ['The Psalm','The first psalm from today’s portion in the prayer book’s monthly cycle through all 150 psalms.'],
+ ['The First Lesson','The first Bible reading, usually from the Old Testament.'],
+ ['The Second Lesson','The second Bible reading, usually from the New Testament.'],
+ ['The First Reading','A Bible reading from M’Cheyne’s calendar, a Scottish plan from 1842 that takes you through the Bible in a year.'],
+ ['The Second Reading','A Bible reading from M’Cheyne’s calendar, a Scottish plan from 1842 that takes you through the Bible in a year.'],
+ ['The Reading','A Bible reading for the household.'],
+ ['The Lesson','A Bible reading from the prayer book’s table of lessons.'],
+ ['Te Deum','An ancient hymn of praise from the early church, named for its first words in Latin: “We praise thee, O God.” Songs like this in the service are called canticles.'],
+ ['Magnificat','The song of Mary when she visited Elizabeth (Luke 1:46-55). Its Latin name is its first word: “magnifies.”'],
+ ['Benedictus','The song of Zechariah at the birth of John the Baptist (Luke 1:68-79). Its Latin name means “Blessed.”'],
+ ['Nunc Dimittis','The song of Simeon when he held the infant Jesus in the temple (Luke 2:29-32). Its Latin name means “now lettest thou depart.”'],
+ ['Jubilate Deo','Psalm 100, “O be joyful in the Lord.” The prayer book allows it in place of the Benedictus.'],
+ ['The Apostles’ Creed','The early baptismal confession of the Western church, summarising the faith in the Father, the Son and the Holy Ghost.'],
+ ['The Prayers','Short petitions said back and forth, called suffrages, with the Lord’s Prayer again.'],
+ ['The Collects','A collect is a short set prayer that gathers one request into a single sentence: it addresses God, recalls something about him, asks, and ends through Christ. The collect of the day follows the church year and changes each week; the others are said every day.'],
+ ['The Catechism','The Westminster Shorter Catechism (1647): 107 questions and answers on what Christians believe and how they are to live. The page takes one a day, starting at Question 1 each Advent.'],
+ ['Prayers and Intercessions','Time to pray in your own words for others: the church, your household, the nation and the work of the day.'],
+ ['Prayers','Time to pray briefly in your own words.'],
+ ['The State Prayers','Prayers for the King, the Royal Family, and the clergy and people, following 1 Timothy 2:1-2. The 1662 book always prays for the civil ruler.'],
+ ['The Prayer of St. Chrysostom','A closing prayer from the Greek liturgy named for John Chrysostom, a fourth-century bishop. Cranmer brought it into English.'],
+ ['A Psalm at the Close of the Day','Psalm 134, a short psalm of evening blessing, sung from the Scottish Psalter of 1650.'],
+ ['The Grace','The blessing from 2 Corinthians 13:14, used to close the service.'],
+];
+const gloss = t => { const g=GLOSS.find(([k])=>t.startsWith(k)); return g?g[1]:null; };
+let gid=0;
+const part = (title, inner) => { const g=gloss(title), id='g'+(gid++);
+  return `<section class="part"><h3><span class="num">${ROM[n++]}.</span><span>${title}</span>${g?`<button class="gl" aria-expanded="false" aria-controls="${id}" aria-label="What is this?">?</button>`:''}</h3>${g?`<p class="gloss" id="${id}" hidden>${esc(g)}</p>`:''}${inner}</section>`; };
 const alt = (sum, inner) => `<details><summary>${sum}</summary>${inner}</details>`;
 const GLORIA = [['text','Glory be to the Father, and to the Son : and to the Holy Ghost;'],['text','As it was in the beginning, is now, and ever shall be : world without end.'],['text','Amen.']];
 
@@ -513,6 +555,7 @@ function finish(d,m,ck){
   $('bProse').setAttribute('aria-pressed',psalter==='prose'); $('bMetre').setAttribute('aria-pressed',psalter==='metre');
   document.title=(m?'Morning':'Evening')+' Prayer · '+d.toLocaleDateString('en-CA',{day:'numeric',month:'short'});
 }
+document.addEventListener('click', e=>{ const b=e.target.closest('.gl'); if(!b) return; const g=$(b.getAttribute('aria-controls')); const open=b.getAttribute('aria-expanded')!=='true'; b.setAttribute('aria-expanded',open); g.hidden=!open; });
 $('bMorn').onclick=()=>{office='m';render();};
 $('bEve').onclick=()=>{office='e';render();};
 const setP=v=>{psalter=v;try{localStorage.setItem('do.psalter',v);}catch(e){} render();};
