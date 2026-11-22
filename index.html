@@ -112,6 +112,10 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
   <p class="sub">Morning and Evening Prayer for the household, after the Book of Common Prayer of 1662, with the Scottish Psalter of 1650 and the Westminster Shorter Catechism</p>
 </header>
 
+<div class="controls" role="group" aria-label="Choose tradition">
+  <button id="t_hybrid" aria-pressed="true">Reformed hybrid</button>
+  <button id="t_anglican" aria-pressed="false">Anglican 1662</button>
+</div>
 <div class="controls" role="group" aria-label="Choose length">
   <button id="b_personal" aria-pressed="false">Personal · 5 min</button>
   <button id="b_family" aria-pressed="false">Family · 10 min</button>
@@ -120,7 +124,7 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
 <div class="controls" role="group" aria-label="Choose office and psalter">
   <button id="bMorn" aria-pressed="true">Morning</button>
   <button id="bEve" aria-pressed="false">Evening</button>
-  <span class="sep"></span>
+  <span class="sep" id="psSep"></span>
   <button id="bProse" aria-pressed="true">Prose psalter</button>
   <button id="bMetre" aria-pressed="false">Metrical psalter</button>
 </div>
@@ -144,6 +148,7 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
   </ul>
   <h3>Editorial choices</h3>
   <ul>
+    <li><b>Two settings.</b> “Anglican 1662” gives the book as it stands: the Absolution, the Coverdale psalms only, the 1662 Kalendar and Tables of Lessons (Apocrypha included), the red-letter saints’ days, the State Prayers, and no catechism. “Reformed hybrid” keeps the 1662 order and prayers but sings the Scottish Psalter, adds the Shorter Catechism, reads M'Cheyne’s calendar, and makes the changes listed below.</li>
     <li>Nothing in the offices is newly composed. Text in red italic is the prayer book's own rubric; notes marked ¶ are this edition's directions only.</li>
     <li>The Absolution is appointed for a minister. In its place this office reads the Comfortable Words of Scripture, from the Communion, and prays the 1662 Collect for pardon and peace (the Twenty-first Sunday after Trinity).</li>
     <li>The 1662 table of lessons includes readings from the Apocrypha. M'Cheyne's calendar, made for Scottish Presbyterian households, is used instead.</li>
@@ -173,8 +178,8 @@ const SEAL = '<svg class="seal" viewBox="0 0 120 120" aria-hidden="true"><g fill
 const now = new Date();
 let day = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 let office = now.getHours() < 15 ? 'm' : 'e';
-let psalter = 'prose', mode = 'personal';
-try { psalter = localStorage.getItem('do.psalter') || 'prose'; mode = localStorage.getItem('do.mode') || 'personal'; } catch(e) {}
+let psalter = 'prose', mode = 'personal', trad = 'hybrid';
+try { psalter = localStorage.getItem('do.psalter') || 'prose'; mode = localStorage.getItem('do.mode') || 'personal'; trad = localStorage.getItem('do.trad') || 'hybrid'; } catch(e) {}
 if (['full','family','personal'].includes(location.hash.slice(1))) mode = location.hash.slice(1);
 
 /* ---------- calendar ---------- */
@@ -359,11 +364,88 @@ function shortOffice(d, dom, m, mc, s, family){
   return h+SEAL;
 }
 
+/* ---------- the Anglican setting: the 1662 book as it stands ---------- */
+const HOLYFIXED={'11-30':'st-andrew','12-21':'st-thomas','12-25':'christmas-day','12-26':'st-stephen','12-27':'st-john-evangelist','12-28':'holy-innocents','1-1':'circumcision','1-6':'epiphany','1-25':'conversion-st-paul','2-2':'purification','2-24':'st-matthias','3-25':'annunciation','4-25':'st-mark','5-1':'st-philip-st-james','6-11':'st-barnabas','6-24':'st-john-baptist','6-29':'st-peter','7-25':'st-james','8-24':'st-bartholomew','9-21':'st-matthew','9-29':'st-michael','10-18':'st-luke','10-28':'st-simon-st-jude','11-1':'all-saints'};
+function holyKey(d){
+  const t=diff(d,easter(d.getFullYear()));
+  const mv={'-4':'wed-before-easter','-3':'thu-before-easter','-2':'good-friday','-1':'easter-even','1':'easter-monday','2':'easter-tuesday','39':'ascension-day','50':'whit-monday','51':'whit-tuesday'}[t];
+  return mv || HOLYFIXED[(d.getMonth()+1)+'-'+d.getDate()] || null;
+}
+function angCollectKey(d){ const h=holyKey(d); return (h && T.collects[h]) ? h : collectKey(d).key; }
+function sundayLessonKey(d){
+  if (d.getDay()!==0) return null;
+  const m=d.getMonth(), dd=d.getDate();
+  if (m===11 && dd>25) return 'christmas-1';
+  if (m===0 && dd<=5) return 'christmas-2';
+  const y=d.getFullYear(), E=easter(y), s=diff(d,E);
+  if (s>56 && d<advent(y)) return 'trinity-'+Math.min(26,(s-56)/7);
+  const k=collectKey(d).key;
+  return T.lessons.sun[k] ? k : null;
+}
+function angLessons(d){
+  const C=T.lessons.cal[(d.getMonth()+1)+'-'+d.getDate()]||{}, out={...C};
+  const sk=sundayLessonKey(d), hk=holyKey(d);
+  const over=(t)=>{ if(!t) return; for (const k in t) if (t[k]) out[k]=t[k]; };
+  if (sk) over(T.lessons.sun[sk]);
+  if (hk && T.lessons.holy[hk]) over(T.lessons.holy[hk]);
+  return out;
+}
+function lesson(r){
+  if (!r) return note('No lesson is appointed in the table for this day.');
+  const v=r.a?'NRSVUE':'KJV';
+  return `<p class="reading"><a href="https://www.biblegateway.com/passage/?search=${encodeURIComponent(r.q)}&version=${v}" target="_blank" rel="noopener">${esc(r.d)}</a></p>`+(r.a?note('From the Apocrypha, read in the 1662 table “for example of life” (Article VI). The link opens a translation that includes it.'):'');
+}
+function collectsAng(d, m){
+  const ck=angCollectKey(d), c=T.collects[ck];
+  let h=`<p class="rub">The Collect of the day: ${esc(c.title)}.</p>`+lines(c.collect.map(t=>['text',t]));
+  for (const x of seasonExtras(d)){ if (x===ck) continue; h+=`<p class="rub">${x==='advent-1'?'In Advent, the Collect of the First Sunday in Advent':'In Lent, the Collect for Ash Wednesday'}.</p>`+lines(T.collects[x].collect.map(t=>['text',t])); }
+  return h;
+}
+const LAYPARDON = () => `<p class="rub">The Absolution is to be pronounced by the Priest alone. Said without a priest, it is left out; a common lay custom prays instead the Collect for the Twenty-first Sunday after Trinity.</p>`+lines(T.collects['trinity-21'].collect.map(t=>['text',t]))+src('Book of Common Prayer, 1662: Collects');
+
+function anglicanOffice(d, dom, m, s){
+  const L=angLessons(d), full=mode==='full', family=mode==='family';
+  const keepPs=psalter; psalter='prose';
+  let h=`<h2>${full?(m?'The Order for Morning Prayer':'The Order for Evening Prayer'):(m?'Morning':'Evening')+' Prayer'+(family?' for the Household':'')}</h2><p class="rub" style="text-align:center">${MODES[mode]}, after the Book of Common Prayer as it stands.</p>`;
+  if (!full) h+=note('The 1662 book has no shorter forms. This one keeps its texts and order and leaves parts out, as lay people commonly do.');
+  else h+=note('Where the book says Priest or Minister, the one leading says it; where it says Answer, all respond. Alone, say all of it.');
+  h+=part('The Sentence', lines([['text',s[0]]],{initial:true})+`<p class="ref">${esc(s[1])}</p>`+(full?'':lines(T.versicles.slice(1,3)))+src('Book of Common Prayer, 1662: Opening Sentences'));
+  h+=part('The Confession', (full?`<details open><summary>The Exhortation</summary>${lines(T.exhortation)}</details>`:'')+lines(full?T.confession:T.confession.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662: The General Confession'));
+  h+=part(full?'The Absolution':'For Pardon', full ? lines(T.absolution)+src('Book of Common Prayer, 1662: The Absolution')+alt('Said without a priest',LAYPARDON()) : LAYPARDON());
+  if (full||family) h+=part("The Lord’s Prayer", lines(full?T.lordsprayer:T.lordsprayer.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
+  if (full||family) h+=part('The Versicles', lines(full?T.versicles:T.versicles.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
+  if (full && m) h+=part('Venite, exultemus Domino', dom===19 && !properKey(d) ? `<p class="rub">${esc(T.venite.find(x=>x[0]==='rubric')[1])}</p>` : lines(T.venite)+src('Book of Common Prayer, 1662: Psalm 95'));
+  if (full) h+=part(`The Psalms appointed: ${psalmLabel(d,office)}`, `<p class="rub">${properKey(d)?'Proper Psalms on certain days: '+T.collects[properKey(d)].title+'.':(dom===31?'The psalms of the thirtieth day. ':'')+'Day '+Math.min(dom,30)+', '+(m?'Morning':'Evening')+' Prayer.'}</p>`+psalmsFor(d,office)+src('Book of Common Prayer, 1662: The Psalter'));
+  else h+=part('The Psalm', note('The first psalm appointed for today.')+firstPsalm(d, office, family?3:2));
+  const L1=L[m?'Morning 1':'Evening 1'], L2=L[m?'Morning 2':'Evening 2'];
+  if (full){
+    h+=part('The First Lesson', lesson(L1)+src('Book of Common Prayer, 1662: The Kalendar and Tables of Lessons'));
+    h+= m ? part('Te Deum Laudamus', lines(T.tedeum)+alt('Or the Benedicite', lines(T.benedicite))+src('Book of Common Prayer, 1662'))
+          : part('Magnificat', lines(T.magnificat)+(dom===19?'':alt('Or Psalm 98, Cantate Domino', lines(T.cantate)))+src('Book of Common Prayer, 1662'));
+  }
+  if (full||family) h+=part(full?'The Second Lesson':'The Lesson', lesson(L2)+src('Book of Common Prayer, 1662: The Kalendar and Tables of Lessons'));
+  if (full) h+= m ? part('Benedictus', lines(T.benedictus)+alt('Or Psalm 100, Jubilate Deo', lines(T.jubilate))+src('Book of Common Prayer, 1662'))
+                  : part('Nunc Dimittis', lines(T.nunc)+(dom===12?'':alt('Or Psalm 67, Deus misereatur', lines(T.misereatur)))+src('Book of Common Prayer, 1662'));
+  if (family) h+= m ? part('Jubilate Deo', lines(T.jubilate)+src('Book of Common Prayer, 1662: Psalm 100')) : part('Nunc Dimittis', lines(T.nunc)+src('Book of Common Prayer, 1662'));
+  if (full||family) h+=part("The Apostles’ Creed", lines(T.creed.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
+  if (full) h+=part('The Prayers', lines(T.suffrages)+src('Book of Common Prayer, 1662'));
+  if (mode==='personal') h+=part("The Lord’s Prayer", lines(T.lordsprayer.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
+  h+=part('The Collects', collectsAng(d,m)+(full?lines(m?T.peace_mp:T.peace_ep):'')+lines(m?T.grace_mp:T.perils)+src('Book of Common Prayer, 1662'));
+  if (full) h+=part('The State Prayers', lines(T.anthem)+lines(T.king)+lines(T.royal)+lines(T.clergy)+src('Book of Common Prayer, 1662'));
+  if (mode!=='personal') h+=part('The Prayer of St. Chrysostom', lines(T.chrysostom)+src('Book of Common Prayer, 1662'));
+  h+=part('The Grace', lines(T.thegrace.filter(x=>x[0]!=='rubric'))+`<p class="ref">2 Corinthians 13</p>`);
+  psalter=keepPs;
+  return h+SEAL;
+}
+
 function render(){
   n=0;
   const d=day, dom=d.getDate(), m=office==='m', mc=mcheyne(d), ck=collectKey(d).key;
   const sIdx=(diff(d,new Date(2026,0,1))+(m?0:5)) % 11, s=T.sentences[(sIdx+11)%11];
   for (const k in MODES) $('b_'+k).setAttribute('aria-pressed', mode===k);
+  $('t_hybrid').setAttribute('aria-pressed', trad==='hybrid'); $('t_anglican').setAttribute('aria-pressed', trad==='anglican');
+  for (const id of ['bProse','bMetre','psSep']) $(id).hidden = trad==='anglican';
+  if (trad==='anglican'){ $('office').innerHTML=anglicanOffice(d,dom,m,s); return finish(d,m,angCollectKey(d)); }
   if (mode!=='full'){ $('office').innerHTML=shortOffice(d,dom,m,mc,s,mode==='family'); return finish(d,m,ck); }
   let h=`<h2>${m?'The Order for Morning Prayer':'The Order for Evening Prayer'}</h2><p class="rub" style="text-align:center">${MODES.full}.</p>`;
   h+=note('Where the book says Priest or Minister, the one leading says it; where it says Answer, all respond. Alone, say all of it.');
@@ -435,6 +517,7 @@ $('bMorn').onclick=()=>{office='m';render();};
 $('bEve').onclick=()=>{office='e';render();};
 const setP=v=>{psalter=v;try{localStorage.setItem('do.psalter',v);}catch(e){} render();};
 $('bProse').onclick=()=>setP('prose'); $('bMetre').onclick=()=>setP('metre');
+for (const k of ['hybrid','anglican']) $('t_'+k).onclick=()=>{trad=k;try{localStorage.setItem('do.trad',k);}catch(e){} render();};
 for (const k of ['full','family','personal']) $('b_'+k).onclick=()=>{mode=k;try{localStorage.setItem('do.mode',k);}catch(e){} try{history.replaceState(null,'','#'+k);}catch(e){} render();};
 function seasonStarts(from){
   const out=[], push=(name,d)=>{ if(diff(d,from)>=0) out.push([name,d]); };
@@ -454,7 +537,7 @@ function seasonStarts(from){
 $('bPrev').onclick=()=>{day=addD(day,-1);render();};
 $('bNext').onclick=()=>{day=addD(day,1);render();};
 $('bToday').onclick=()=>{day=new Date(now.getFullYear(),now.getMonth(),now.getDate());render();};
-window.__DO={collectKey,easter,advent,mcheyne,render,setDay:d=>{day=d;render();},setOffice:o=>{office=o;render();},setPsalter:setP,setMode:k=>{mode=k;render();}};
+window.__DO={collectKey,easter,advent,mcheyne,render,setDay:d=>{day=d;render();},setOffice:o=>{office=o;render();},setPsalter:setP,setMode:k=>{mode=k;render();},setTrad:k=>{trad=k;render();},angLessons,holyKey,sundayLessonKey};
 render();
 }).catch(function(e){document.getElementById('office').innerHTML='<p class="rub">The texts could not be loaded. Reload the page.</p>';});
 </script>
