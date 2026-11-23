@@ -153,6 +153,7 @@ footer .ref{text-align:right;white-space:nowrap;font-variant-caps:small-caps;fon
   <h3>Editorial choices</h3>
   <ul>
     <li><b>Two settings.</b> “Anglican 1662” gives the book as it stands: the Absolution, the Coverdale psalms only, the 1662 Kalendar and Tables of Lessons (Apocrypha included), the red-letter saints’ days, the State Prayers, and no catechism. “Reformed hybrid” keeps the 1662 order and prayers but sings the Scottish Psalter, adds the Shorter Catechism, reads M'Cheyne’s calendar, and makes the changes listed below.</li>
+    <li>The Creed of Saint Athanasius is from the 1662 text as transcribed in the DyslexicBCP edition (<a href="https://github.com/MrTreev/DyslexicBCP">github.com/MrTreev/DyslexicBCP</a>).</li>
     <li>Nothing in the offices is newly composed. Text in red italic is the prayer book's own rubric; notes marked ¶ are this edition's directions only.</li>
     <li>The Absolution is appointed for a minister. In its place this office reads the Comfortable Words of Scripture, from the Communion, and prays the 1662 Collect for pardon and peace (the Twenty-first Sunday after Trinity).</li>
     <li>The 1662 table of lessons includes readings from the Apocrypha. M'Cheyne's calendar, made for Scottish Presbyterian households, is used instead.</li>
@@ -281,6 +282,9 @@ const GLOSS = [
  ['Prayers and Intercessions','Time to pray in your own words for others: the church, your household, the nation and the work of the day.'],
  ['Prayers','Time to pray briefly in your own words.'],
  ['The State Prayers','Prayers for the King, the Royal Family, and the clergy and people, following 1 Timothy 2:1-2. The 1662 book always prays for the civil ruler.'],
+ ['The Creed of Saint Athanasius','A fuller confession of the Trinity and the Incarnation from the early Western church, named for Athanasius of Alexandria. The 1662 book appoints it in place of the Apostles’ Creed at Morning Prayer on thirteen feasts.'],
+ ['The Easter Anthems','On Easter Day three passages about Christ’s resurrection replace Psalm 95 at Morning Prayer.'],
+ ['The Litany','A long responsive prayer of intercession, written by Cranmer in 1544, the first service in English.'],
  ['The Prayer of St. Chrysostom','A closing prayer from the Greek liturgy named for John Chrysostom, a fourth-century bishop. Cranmer brought it into English.'],
  ['A Psalm at the Close of the Day','Psalm 134, a short psalm of evening blessing, sung from the Scottish Psalter of 1650.'],
  ['The Grace','The blessing from 2 Corinthians 13:14, used to close the service.'],
@@ -414,6 +418,13 @@ function holyKey(d){
   return mv || HOLYFIXED[(d.getMonth()+1)+'-'+d.getDate()] || null;
 }
 function angCollectKey(d){ const h=holyKey(d); return (h && T.collects[h]) ? h : collectKey(d).key; }
+/* 1662: "The Collect appointed for any Sunday or other Holy-day that hath a Vigil or Eve, shall be said at the Evening Service next before." */
+function angCollectFor(d, m){
+  if (!m){ const t=addD(d,1), h=holyKey(t); if (t.getDay()===0 || (h && T.collects[h])) return {key:angCollectKey(t), eve:true}; }
+  return {key:angCollectKey(d), eve:false};
+}
+const ATHANASIAN=['christmas-day','epiphany','st-matthias','easter-day','ascension-day','whitsunday','st-john-baptist','st-james','st-bartholomew','st-matthew','st-simon-st-jude','st-andrew','trinity-sunday'];
+function feastKey(d){ const h=holyKey(d); if (h) return h; const t=diff(d,easter(d.getFullYear())); return {'0':'easter-day','49':'whitsunday','56':'trinity-sunday'}[t]||null; }
 function sundayLessonKey(d){
   if (d.getDay()!==0) return null;
   const m=d.getMonth(), dd=d.getDate();
@@ -438,8 +449,8 @@ function lesson(r){
   return `<p class="reading"><a href="https://www.biblegateway.com/passage/?search=${encodeURIComponent(r.q)}&version=${v}" target="_blank" rel="noopener">${esc(r.d)}</a></p>`+(r.a?note('From the Apocrypha, read in the 1662 table “for example of life” (Article VI). The link opens a translation that includes it.'):'');
 }
 function collectsAng(d, m){
-  const ck=angCollectKey(d), c=T.collects[ck];
-  let h=`<p class="rub">The Collect of the day: ${esc(c.title)}.</p>`+lines(c.collect.map(t=>['text',t]));
+  const cf=angCollectFor(d,m), ck=cf.key, c=T.collects[ck];
+  let h=`<p class="rub">The Collect of the day: ${esc(c.title)}${cf.eve?', said at Evening Prayer on the eve':''}.</p>`+lines(c.collect.map(t=>['text',t]));
   for (const x of seasonExtras(d)){ if (x===ck) continue; h+=`<p class="rub">${x==='advent-1'?'In Advent, the Collect of the First Sunday in Advent':'In Lent, the Collect for Ash Wednesday'}.</p>`+lines(T.collects[x].collect.map(t=>['text',t])); }
   return h;
 }
@@ -456,7 +467,12 @@ function anglicanOffice(d, dom, m, s){
   h+=part(full?'The Absolution':'For Pardon', full ? lines(T.absolution)+src('Book of Common Prayer, 1662: The Absolution')+alt('Said without a priest',LAYPARDON()) : LAYPARDON());
   if (full||family) h+=part("The Lord’s Prayer", lines(full?T.lordsprayer:T.lordsprayer.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
   if (full||family) h+=part('The Versicles', lines(full?T.versicles:T.versicles.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
-  if (full && m) h+=part('Venite, exultemus Domino', dom===19 && !properKey(d) ? `<p class="rub">${esc(T.venite.find(x=>x[0]==='rubric')[1])}</p>` : lines(T.venite)+src('Book of Common Prayer, 1662: Psalm 95'));
+  if (full && m){
+    if (feastKey(d)==='easter-day') h+=part('The Easter Anthems', `<p class="rub">At Morning Prayer, instead of the Psalm, O come, let us, &c. these Anthems shall be sung or said.</p>`+
+      note('The Anthems are three passages of Scripture, said in turn, then the Glory be:')+
+      ['1 Corinthians 5:7-8','Romans 6:9-11','1 Corinthians 15:20-22'].map(r=>`<p class="reading"><a href="https://www.biblegateway.com/passage/?search=${encodeURIComponent(r)}&version=KJV" target="_blank" rel="noopener">${r}</a></p>`).join('')+lines(GLORIA)+src('Book of Common Prayer, 1662: Easter Day'));
+    else h+=part('Venite, exultemus Domino', dom===19 && !properKey(d) ? `<p class="rub">${esc(T.venite.find(x=>x[0]==='rubric')[1])}</p>` : lines(T.venite)+src('Book of Common Prayer, 1662: Psalm 95'));
+  }
   if (full) h+=part(`The Psalms appointed: ${psalmLabel(d,office)}`, `<p class="rub">${properKey(d)?'Proper Psalms on certain days: '+T.collects[properKey(d)].title+'.':(dom===31?'The psalms of the thirtieth day. ':'')+'Day '+Math.min(dom,30)+', '+(m?'Morning':'Evening')+' Prayer.'}</p>`+psalmsFor(d,office)+src('Book of Common Prayer, 1662: The Psalter'));
   else h+=part('The Psalm', note('The first psalm appointed for today.')+firstPsalm(d, office, family?3:2));
   const L1=L[m?'Morning 1':'Evening 1'], L2=L[m?'Morning 2':'Evening 2'];
@@ -469,10 +485,12 @@ function anglicanOffice(d, dom, m, s){
   if (full) h+= m ? part('Benedictus', lines(T.benedictus)+alt('Or Psalm 100, Jubilate Deo', lines(T.jubilate))+src('Book of Common Prayer, 1662'))
                   : part('Nunc Dimittis', lines(T.nunc)+(dom===12?'':alt('Or Psalm 67, Deus misereatur', lines(T.misereatur)))+src('Book of Common Prayer, 1662'));
   if (family) h+= m ? part('Jubilate Deo', lines(T.jubilate)+src('Book of Common Prayer, 1662: Psalm 100')) : part('Nunc Dimittis', lines(T.nunc)+src('Book of Common Prayer, 1662'));
-  if (full||family) h+=part("The Apostles’ Creed", lines(T.creed.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
+  if ((full||family) && m && ATHANASIAN.includes(feastKey(d))) h+=part('The Creed of Saint Athanasius', lines(full?T.athanasian:T.athanasian.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662: Quicunque vult'));
+  else if (full||family) h+=part("The Apostles’ Creed", lines(T.creed.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
   if (full) h+=part('The Prayers', lines(T.suffrages)+src('Book of Common Prayer, 1662'));
   if (mode==='personal') h+=part("The Lord’s Prayer", lines(T.lordsprayer.filter(x=>x[0]!=='rubric'))+src('Book of Common Prayer, 1662'));
   h+=part('The Collects', collectsAng(d,m)+(full?lines(m?T.peace_mp:T.peace_ep):'')+lines(m?T.grace_mp:T.perils)+src('Book of Common Prayer, 1662'));
+  if (full && m && [0,3,5].includes(d.getDay())) h+=part('The Litany', note('The 1662 book appoints the Litany to be sung or said after Morning Prayer on Sundays, Wednesdays and Fridays. Its text is not yet on this page; when it is used, only the last two of the five prayers below are said, as it places them.'));
   if (full) h+=part('The State Prayers', lines(T.anthem)+lines(T.king)+lines(T.royal)+lines(T.clergy)+src('Book of Common Prayer, 1662'));
   if (mode!=='personal') h+=part('The Prayer of St. Chrysostom', lines(T.chrysostom)+src('Book of Common Prayer, 1662'));
   h+=part('The Grace', lines(T.thegrace.filter(x=>x[0]!=='rubric'))+`<p class="ref">2 Corinthians 13</p>`);
